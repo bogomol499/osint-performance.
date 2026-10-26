@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OSINT Performance</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: dark monochrome recon console — left sidebar of query types + sections, main area with a grainy atmospheric background, a big title, a large search bar and grouped source links. Single committed dark theme, grayscale, no color accent. */
+  :root {
+    --bg: #0b0b0b;
+    --panel: #151515;
+    --panel-2: #1b1b1b;
+    --fg: #e9e9e9;
+    --muted: #9a9a9a;
+    --faint: #606060;
+    --line: #242424;
+    --line-strong: #363636;
+    --accent: #ededed;
+    --accent-soft: rgba(255,255,255,0.07);
+    --accent-fg: #0b0b0b;
+    --ok: #d6d6d6;
+    --ok-soft: rgba(255,255,255,0.04);
+    --warn-bg: rgba(255,255,255,0.035);
+    --warn-line: #333333;
+    --warn-fg: #b7b7b7;
+    --f-head: "Helvetica Neue", Helvetica, Arial, "Segoe UI", system-ui, sans-serif;
+    --f-body: "Helvetica Neue", Helvetica, Arial, "Segoe UI", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+    --r: 10px;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--f-body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding-left: max(18px, env(safe-area-inset-left, 0px));
+    padding-right: max(18px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+  a { color: inherit; }
+
+  /* ---- header ---- */
+  header.hero { padding-block: 44px 10px; }
+  .brandline {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--f-mono);
+    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .brandline .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  h1 {
+    font-family: var(--f-head);
+    font-weight: 700;
+    font-size: clamp(30px, 6.5vw, 50px);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    margin: 0 0 14px;
+  }
+  .lede { color: var(--muted); font-size: 16px; max-width: 60ch; margin: 0; }
+
+  /* ---- console ---- */
+  .console {
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+    padding: 18px;
+    margin-block: 26px 14px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 10px 30px -18px rgba(0,0,0,.25);
+  }
+  .console-label {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--faint); margin: 0 0 12px;
+  }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .seg button {
+    font-family: var(--f-body); font-size: 13px; font-weight: 500;
+    padding: 8px 13px; border-radius: 999px;
+    border: 1px solid var(--line-strong); background: var(--panel-2);
+    color: var(--muted); cursor: pointer; transition: .14s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .query-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  #q {
+    flex: 1 1 240px; min-width: 0;
+    font-family: var(--f-mono); font-size: 15px;
+    padding: 13px 15px; border-radius: 10px;
+    border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--fg);
+  }
+  #q:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .q-hint { font-size: 12.5px; color: var(--faint); margin: 10px 2px 0; min-height: 1.2em; }
+
+  .results { margin-block: 6px 30px; }
+  .results-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .results-head h2 { font-family: var(--f-head); font-weight: 600; font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+  .results-head .meta { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+  .results-head .val { color: var(--accent); font-weight: 500; }
+  .run-list { display: flex; flex-direction: column; gap: 8px; }
+  a.run {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; text-decoration: none;
+    transition: .14s;
+  }
+  a.run:hover { border-color: var(--accent); transform: translateX(2px); }
+  a.run:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a.run .r-name { font-family: var(--f-head); font-weight: 500; font-size: 15px; }
+  a.run .r-host { font-family: var(--f-mono); font-size: 11px; color: var(--faint); }
+  a.run .r-go {
+    margin-left: auto; font-family: var(--f-mono); font-size: 12px; font-weight: 500;
+    white-space: nowrap; padding: 5px 11px; border-radius: 7px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  a.run .r-go.plain { background: var(--panel-2); color: var(--muted); }
+  .run-note { font-size: 12.5px; color: var(--faint); margin: 12px 2px 0; }
+
+  .icon-btn {
+    font-family: var(--f-body); font-size: 13px; font-weight: 500;
+    padding: 0 16px; border-radius: 10px; white-space: nowrap; cursor: pointer;
+    border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--muted);
+    transition: .14s;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .run-group { margin-bottom: 18px; }
+  .run-group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .run-group-head h3 { font-family: var(--f-head); font-weight: 600; font-size: 13.5px; margin: 0; color: var(--muted); }
+  .run-group-head .g-count { font-family: var(--f-mono); font-size: 11px; color: var(--faint); }
+  .run-list-inner { display: flex; flex-direction: column; gap: 8px; }
+  .open-all {
+    margin-left: auto; font-family: var(--f-mono); font-size: 12px; font-weight: 500;
+    padding: 6px 12px; border-radius: 7px; white-space: nowrap; cursor: pointer;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent); transition: .14s;
+  }
+  .open-all:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); }
+  .open-all:disabled { opacity: .4; cursor: default; border-color: var(--line); color: var(--faint); }
+  .open-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- generic section ---- */
+  .section-label {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--faint);
+    border-top: 1px solid var(--line); padding-top: 26px; margin: 36px 0 18px;
+  }
+
+  /* ---- self-check & checklist panels ---- */
+  .panel {
+    border: 1px solid var(--line); border-radius: var(--r);
+    padding: 18px 18px; background: var(--panel); margin-bottom: 14px;
+  }
+  .panel.ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: var(--ok-soft); }
+  .panel h3 { font-family: var(--f-head); font-weight: 600; font-size: 17px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .panel p { margin: 0 0 12px; color: var(--muted); font-size: 14px; max-width: 64ch; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    font-family: var(--f-body); font-weight: 600; font-size: 14px;
+    padding: 10px 16px; border-radius: 9px; background: var(--ok); color: #fff;
+  }
+  .btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
+  ol.steps li { counter-increment: s; display: flex; gap: 13px; align-items: flex-start; }
+  ol.steps li::before {
+    content: counter(s, decimal-leading-zero);
+    font-family: var(--f-mono); font-size: 12px; font-weight: 500;
+    color: var(--accent); background: var(--accent-soft);
+    min-width: 30px; height: 30px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+  }
+  ol.steps .st-name { font-weight: 600; font-size: 14.5px; }
+  ol.steps .st-desc { color: var(--muted); font-size: 13.5px; }
+
+  /* ---- catalog ---- */
+  .cat-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  #filter {
+    flex: 1 1 200px; min-width: 0; font-family: var(--f-body); font-size: 14px;
+    padding: 10px 13px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  }
+  #filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cat-count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  section.cat { margin-bottom: 30px; }
+  .cat-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+  .cat-head h2 { font-family: var(--f-head); font-weight: 600; font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+  .cat-head .num { font-family: var(--f-mono); font-size: 12px; color: var(--faint); }
+  .cat-desc { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; max-width: 66ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 11px; }
+  a.card {
+    display: block; text-decoration: none; color: inherit; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 11px; padding: 14px 15px; transition: .14s;
+  }
+  a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a.card .name { font-family: var(--f-head); font-weight: 500; font-size: 15px; margin: 0 0 3px; }
+  a.card .host { font-family: var(--f-mono); font-size: 11px; color: var(--accent); word-break: break-all; }
+  a.card .desc { font-size: 13px; color: var(--muted); margin: 7px 0 0; }
+  .empty { color: var(--muted); font-size: 15px; padding: 24px 0; display: none; }
+
+  .notice {
+    background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-fg);
+    border-radius: var(--r); padding: 14px 16px; margin-block: 22px; font-size: 13.5px;
+  }
+  .notice strong { font-weight: 600; }
+
+  footer {
+    border-top: 1px solid var(--line); margin-top: 20px; padding-block: 26px 48px;
+    color: var(--faint); font-size: 13px;
+  }
+  footer p { margin: 0 0 8px; max-width: 72ch; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  /* ===== osintlist-style dark shell ===== */
+  html, body { height: auto; }
+  body { background: #090909; }
+  .shell { display: grid; grid-template-columns: 252px 1fr; min-height: 100vh; }
+
+  .sidebar {
+    position: sticky; top: env(safe-area-inset-top, 0px); align-self: start;
+    height: 100vh; overflow-y: auto;
+    background: #0d0d0d; border-right: 1px solid var(--line);
+    padding: 24px 14px 24px max(14px, env(safe-area-inset-left, 0px));
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .brand .brand-name { font-family: var(--f-head); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; color: var(--fg); }
+  .brand .brand-sub { font-family: var(--f-mono); font-size: 11px; color: var(--faint); margin-top: 3px; }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav-label {
+    font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--faint); margin: 12px 8px 4px;
+  }
+  .nav-label:first-child { margin-top: 0; }
+  .nav-link {
+    text-decoration: none; color: var(--muted); font-size: 14px;
+    padding: 9px 12px; border-radius: 8px; transition: .14s;
+  }
+  .nav-link:hover { background: var(--accent-soft); color: var(--fg); }
+  .side-foot { margin-top: auto; font-size: 11.5px; color: var(--faint); line-height: 1.5; padding: 0 8px; display: flex; flex-direction: column; gap: 7px; }
+  .side-foot .tg {
+    display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+    color: var(--accent-fg); background: var(--fg); text-decoration: none;
+    font-family: var(--f-body); font-weight: 600; font-size: 12.5px;
+    padding: 8px 13px; border-radius: 8px; transition: .14s;
+  }
+  .side-foot .tg:hover { opacity: .85; }
+  .side-foot .tg:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+  /* sidebar tool list */
+  .nav-filter {
+    width: 100%; font-family: var(--f-body); font-size: 13px; color: var(--fg);
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
+    padding: 9px 11px;
+  }
+  .nav-filter:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav-cat {
+    font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--faint); margin: 16px 10px 5px; display: flex; align-items: center; gap: 7px;
+  }
+  .nav-cat::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); flex: none; }
+  .nav-group:first-of-type .nav-cat { margin-top: 4px; }
+  .nav button {
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    border: none; background: transparent; color: var(--muted);
+    font-family: var(--f-body); font-size: 13.5px; padding: 7px 12px; border-radius: 7px;
+  }
+  .nav button:hover { background: var(--accent-soft); color: var(--fg); }
+  .nav .nav-tool[aria-current="true"], .nav .nav-special[aria-current="true"] {
+    background: var(--accent-soft); color: var(--fg); font-weight: 500; box-shadow: inset 2px 0 0 var(--fg);
+  }
+  .nav .nav-all { color: var(--faint); font-size: 11.5px; font-family: var(--f-mono); }
+  .nav .nav-all:hover { color: var(--fg); }
+  .nav .nav-special { font-size: 14px; color: var(--fg); }
+
+  .go-btn {
+    font-family: var(--f-body); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    padding: 11px 18px; border-radius: 9px; border: 1px solid var(--fg); background: var(--fg); color: var(--bg); transition: .14s;
+  }
+  .go-btn:hover { background: transparent; color: var(--fg); }
+  .go-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .tool-host { font-family: var(--f-mono); font-size: 12px; color: var(--faint); margin: 14px 2px 0; }
+
+  /* main */
+  .main { position: relative; min-width: 0; }
+  .bg { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(130% 80% at 78% -10%, rgba(165,165,165,.14), transparent 55%),
+      radial-gradient(80% 60% at 108% -5%, rgba(255,255,255,.06), transparent 50%),
+      radial-gradient(140% 120% at 20% 120%, rgba(0,0,0,.55), transparent 60%),
+      linear-gradient(180deg, #141414 0%, #0a0a0a 72%);
+  }
+  .bg::before {
+    content: ""; position: absolute; inset: 0; opacity: .3; pointer-events: none;
+    background-repeat: no-repeat; background-position: top right; background-size: 66% auto;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='600'%20height='600'%3E%3Cdefs%3E%3Cfilter%20id='b'%3E%3CfeGaussianBlur%20stdDeviation='1.1'/%3E%3C/filter%3E%3C/defs%3E%3Cg%20fill='none'%20stroke='%23a0a0a0'%20stroke-width='1.4'%20stroke-linecap='round'%20filter='url(%23b)'%20opacity='0.55'%3E%3Cpath%20d='M580%208%20C500%2070%20470%2092%20432%20170%20C402%20232%20360%20252%20300%20300'/%3E%3Cpath%20d='M470%2092%20C452%2060%20420%2054%20388%2030'/%3E%3Cpath%20d='M432%20170%20C410%20150%20372%20150%20342%20120'/%3E%3Cpath%20d='M300%20300%20C280%20280%20240%20286%20210%20250'/%3E%3Cpath%20d='M432%20170%20C442%20212%20420%20262%20442%20322'/%3E%3Cpath%20d='M388%2030%20C368%2020%20348%2030%20330%2014'/%3E%3Cpath%20d='M342%20120%20C322%20112%20300%20120%20286%20100'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  .bg::after {
+    content: ""; position: absolute; inset: 0; opacity: .05; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .main-inner {
+    position: relative; z-index: 1; max-width: 880px;
+    padding: 44px max(20px, env(safe-area-inset-right, 0px)) 64px 40px;
+  }
+  .mhead h1 {
+    font-family: var(--f-head); font-weight: 700; font-size: clamp(32px, 5.5vw, 52px);
+    line-height: 1.0; letter-spacing: -0.03em; margin: 0 0 10px; color: var(--fg);
+  }
+  .mhead .mdesc { color: var(--muted); font-size: 15.5px; max-width: 62ch; margin: 0; }
+
+  .searchbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line-strong); margin-top: 30px; padding-bottom: 4px;
+  }
+  .searchbar #q {
+    flex: 1 1 240px; min-width: 0; background: transparent; border: none; border-radius: 0;
+    padding: 12px 2px; font-family: var(--f-body); font-size: clamp(18px, 2.6vw, 24px); color: var(--fg);
+  }
+  .searchbar #q:focus-visible { outline: none; }
+  .searchbar #q::placeholder { color: var(--faint); }
+  .enter-hint { font-family: var(--f-mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+
+  .block { margin-top: 10px; }
+  .section-label { border-top: 1px solid var(--line); }
+
+  /* monochrome tweaks over existing components */
+  a.card .host { color: var(--muted); }
+  .btn { background: transparent; border: 1px solid var(--fg); color: var(--fg); }
+  .btn:hover { background: var(--fg); color: var(--bg); }
+  .panel.ok { background: var(--ok-soft); border-color: var(--line-strong); }
+
+  @media (max-width: 820px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar {
+      position: static; height: auto; max-height: 46vh; overflow-y: auto;
+      border-right: none; border-bottom: 1px solid var(--line);
+      padding: 16px max(16px, env(safe-area-inset-left, 0px));
+    }
+    .side-foot { display: none; }
+    .main-inner { padding: 26px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); }
+    .bg::before { background-size: 115% auto; opacity: .22; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-name">OSINT Performance</div>
+      <div class="brand-sub">открытые источники · recon</div>
+    </div>
+    <input id="navfilter" class="nav-filter" type="search" placeholder="Фильтр инструментов…" aria-label="Фильтр инструментов" autocomplete="off">
+    <nav class="nav" id="nav" aria-label="Инструменты"></nav>
+    <div class="side-foot">
+      <a class="tg" href="https://t.me/fuckprincov" target="_blank" rel="noopener noreferrer">✈ Написать в Telegram — @fuckprincov</a>
+      <span>Только открытые источники. Автоматического сбора данных о людях нет — переходы вручную.</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="bg" aria-hidden="true"></div>
+    <div class="main-inner">
+      <div id="toolview">
+        <header class="mhead">
+          <h1 id="mainTitle"></h1>
+          <p class="mdesc" id="mainDesc"></p>
+        </header>
+        <div class="searchbar" id="searchbar" role="search">
+          <input id="q" type="search" autocomplete="off" aria-label="Значение запроса">
+          <button id="gobtn" class="go-btn" type="button">Открыть →</button>
+          <button id="copyq" class="icon-btn" type="button">Копировать</button>
+        </div>
+        <p class="q-hint" id="qhint"></p>
+        <p class="tool-host" id="toolhost"></p>
+
+        <div class="notice" role="note" style="margin-top:26px">
+          <strong>Граница.</strong> Только открытые источники и ваши собственные данные. Автоматического «пробива», захвата аккаунтов и социальной инженерии здесь нет — все переходы вы делаете вручную в самих сервисах.
+        </div>
+      </div>
+
+      <div id="self-view" class="block" hidden>
+        <header class="mhead"><h1>Проверка себя</h1></header>
+        <div class="panel ok">
+          <h3>Проверьте свои утечки</h3>
+          <p>Введите на Have I Been Pwned <em>свой собственный</em> email или телефон и узнайте, в каких утечках они засветились. Это нужно, чтобы вовремя сменить пароли и включить двухфакторную аутентификацию. Проверять чужие данные без согласия владельца — незаконно.</p>
+          <a class="btn" href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer">Открыть HaveIBeenPwned →</a>
+        </div>
+      </div>
+
+      <div id="checklist-view" class="block" hidden>
+        <header class="mhead"><h1>Чеклист расследования</h1></header>
+        <div class="panel">
+          <h3>Порядок работы по открытым источникам</h3>
+          <p>Последовательность, которая помогает не упустить шаги и держаться в рамках закона. Любой контакт с личными данными — только на законных основаниях; поиск пропавших людей ведётся через полицию и официальные каналы.</p>
+          <ol class="steps" id="steps"></ol>
+        </div>
+      </div>
+
+      <footer>
+        <p>Справочник носит образовательный характер и предназначен для журналистов, исследователей безопасности и специалистов, работающих в правовом поле. Ответственность за использование любого стороннего сервиса лежит на пользователе.</p>
+        <p>Ссылки открываются в новой вкладке. Состав сервисов, их доступность и правила могут меняться.</p>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ---- query types ----
+  const TYPES = [
+    { id: "name",     label: "Имя / ФИО",     ph: "Иван Петров Москва",            hint: "Поиск по поисковикам и картам. Добавляйте город, профессию, учебу — сужает выдачу." },
+    { id: "username", label: "Никнейм",        ph: "john_doe",                      hint: "Проверка профилей по платформам + поисковые дорки по нику." },
+    { id: "email",    label: "Email",          ph: "name@example.com",              hint: "Для своего адреса — проверка утечек. Плюс репутация и поисковики." },
+    { id: "phone",    label: "Телефон",        ph: "+79001234567",                  hint: "Только метаданные: страна, оператор, формат. Не деанон владельца." },
+    { id: "infra",    label: "Домен / IP",     ph: "example.com  или  8.8.8.8",     hint: "Публичная инфраструктура: WHOIS, DNS, сертификаты, устройства." },
+    { id: "image",    label: "Изображение",    ph: "https://…/photo.jpg",           hint: "Вставьте прямую ссылку на изображение для обратного поиска." },
+  ];
+
+  // ---- tools ----  tmpl uses {q}; types[] links a tool to query types
+  const TOOLS = [
+    // Поисковики
+    { cat: "Поисковики и дорки", name: "Google", host: "google.com", url: "https://www.google.com", tmpl: "https://www.google.com/search?q={q}", types: ["name","username","email","phone"], desc: "Основной веб-индекс. Используйте кавычки и операторы (site:, intitle:)." },
+    { cat: "Поисковики и дорки", name: "Yandex", host: "yandex.com", url: "https://yandex.com", tmpl: "https://yandex.com/search/?text={q}", types: ["name","username","email","phone"], desc: "Альтернативный индекс, часто лучше по рунету." },
+    { cat: "Поисковики и дорки", name: "Brave Search", host: "search.brave.com", url: "https://search.brave.com", tmpl: "https://search.brave.com/search?q={q}", types: ["name","username","email","phone"], desc: "Независимый индекс, меньше персонализации." },
+    { cat: "Поисковики и дорки", name: "DuckDuckGo", host: "duckduckgo.com", url: "https://duckduckgo.com", tmpl: "https://duckduckgo.com/?q={q}", types: ["name","username","email","phone"], desc: "Поиск без трекинга, чистая выдача." },
+    { cat: "Поисковики и дорки", name: "Bing", host: "bing.com", url: "https://www.bing.com", tmpl: "https://www.bing.com/search?q={q}", types: ["name","username","email","phone"], desc: "Ещё один индекс для перекрёстной проверки." },
+    { cat: "Поисковики и дорки", name: "DorkSearch", host: "dorksearch.com", url: "https://dorksearch.com", types: ["name","username","email"], desc: "Конструктор поисковых дорков без запоминания синтаксиса." },
+
+    // Ник
+    { cat: "Поиск по нику", name: "WhatsMyName", host: "whatsmyname.app", url: "https://whatsmyname.app", types: ["username"], desc: "Проверяет ник на сотнях сайтов. Открытый проект." },
+    { cat: "Поиск по нику", name: "Sherlock", host: "github.com/sherlock-project", url: "https://github.com/sherlock-project/sherlock", types: ["username"], desc: "Консольный поиск аккаунтов по нику. Open source." },
+    { cat: "Поиск по нику", name: "Maigret", host: "github.com/soxoj/maigret", url: "https://github.com/soxoj/maigret", types: ["username"], desc: "Расширенный сбор публичных профилей по нику. Open source." },
+    { cat: "Поиск по нику", name: "InstantUsername", host: "instantusername.com", url: "https://instantusername.com", types: ["username"], desc: "Быстрая проверка доступности ника на сервисах." },
+    { cat: "Поиск по нику", name: "Namechk", host: "namechk.com", url: "https://namechk.com", types: ["username"], desc: "Проверка ника и домена одновременно." },
+
+    // Email
+    { cat: "Email", name: "Have I Been Pwned", host: "haveibeenpwned.com", url: "https://haveibeenpwned.com", types: ["email"], desc: "Проверка СВОЕГО адреса по известным утечкам." },
+    { cat: "Email", name: "EmailRep", host: "emailrep.io", url: "https://emailrep.io", tmpl: "https://emailrep.io/{q}", types: ["email"], desc: "Репутация адреса: возраст, связанные публичные профили." },
+    { cat: "Email", name: "Hunter", host: "hunter.io", url: "https://hunter.io", types: ["email"], desc: "Форматы корпоративных адресов по домену компании." },
+
+    // Телефон
+    { cat: "Номер телефона · метаданные", name: "Veriphone", host: "veriphone.io", url: "https://veriphone.io", types: ["phone"], desc: "Валидация номера: страна, оператор, тип линии." },
+    { cat: "Номер телефона · метаданные", name: "PhoneInfoga", host: "github.com/sundowndev", url: "https://github.com/sundowndev/PhoneInfoga", types: ["phone"], desc: "Open-source сбор публичных метаданных по номеру." },
+    { cat: "Номер телефона · метаданные", name: "NumLookup", host: "numlookup.com", url: "https://www.numlookup.com", types: ["phone"], desc: "Бесплатное определение оператора и региона номера." },
+
+    // Инфраструктура
+    { cat: "Домены и IP · инфраструктура", name: "IPinfo", host: "ipinfo.io", url: "https://ipinfo.io", tmpl: "https://ipinfo.io/{q}", types: ["infra"], desc: "Геолокация, ASN и провайдер по IP." },
+    { cat: "Домены и IP · инфраструктура", name: "ICANN WHOIS", host: "lookup.icann.org", url: "https://lookup.icann.org", tmpl: "https://lookup.icann.org/en/lookup?name={q}", types: ["infra"], desc: "Официальные регистрационные данные домена." },
+    { cat: "Домены и IP · инфраструктура", name: "crt.sh", host: "crt.sh", url: "https://crt.sh", tmpl: "https://crt.sh/?q={q}", types: ["infra"], desc: "Сертификаты (Certificate Transparency) и поддомены." },
+    { cat: "Домены и IP · инфраструктура", name: "Shodan", host: "shodan.io", url: "https://www.shodan.io", tmpl: "https://www.shodan.io/search?query={q}", types: ["infra"], desc: "Поиск по подключённым устройствам и сервисам." },
+    { cat: "Домены и IP · инфраструктура", name: "Censys", host: "search.censys.io", url: "https://search.censys.io", tmpl: "https://search.censys.io/search?resource=hosts&q={q}", types: ["infra"], desc: "Сканы хостов, сертификатов и открытых портов." },
+    { cat: "Домены и IP · инфраструктура", name: "VirusTotal", host: "virustotal.com", url: "https://www.virustotal.com", tmpl: "https://www.virustotal.com/gui/search/{q}", types: ["infra"], desc: "Репутация домена, IP и файлов." },
+    { cat: "Домены и IP · инфраструктура", name: "Web-Check", host: "github.com/Lissy93/web-check", url: "https://github.com/Lissy93/web-check", types: ["infra"], desc: "Комплексный анализ домена. Open source." },
+    { cat: "Домены и IP · инфраструктура", name: "Check-Host", host: "check-host.net", url: "https://check-host.net", tmpl: "https://check-host.net/check-ping?host={q}", types: ["infra"], desc: "Ping, трассировка и доступность из разных точек мира." },
+    { cat: "Домены и IP · инфраструктура", name: "Wayback Machine", host: "web.archive.org", url: "https://web.archive.org", tmpl: "https://web.archive.org/web/*/{q}", types: ["infra"], desc: "Архивные версии страниц и сайтов." },
+
+    // Изображение
+    { cat: "Поиск по изображению", name: "Yandex Images", host: "yandex.com/images", url: "https://yandex.ru/images", tmpl: "https://yandex.com/images/search?rpt=imageview&url={q}", types: ["image"], desc: "Сильнейший обратный поиск по картинке." },
+    { cat: "Поиск по изображению", name: "Google Lens", host: "lens.google.com", url: "https://lens.google.com", tmpl: "https://lens.google.com/uploadbyurl?url={q}", types: ["image"], desc: "Распознавание объектов и источников изображения." },
+    { cat: "Поиск по изображению", name: "TinEye", host: "tineye.com", url: "https://tineye.com", tmpl: "https://www.tineye.com/search?url={q}", types: ["image"], desc: "Где встречалось фото и самая ранняя копия." },
+    { cat: "Поиск по изображению", name: "Bing Visual", host: "bing.com/images", url: "https://www.bing.com/images", types: ["image"], desc: "Визуальный поиск, иногда находит то, что упускают другие." },
+    { cat: "Поиск по изображению", name: "Jeffrey's EXIF Viewer", host: "exif.tools", url: "https://exif.tools", types: ["image"], desc: "Метаданные снимка: камера, дата, координаты (если есть)." },
+    { cat: "Поиск по изображению", name: "FotoForensics", host: "fotoforensics.com", url: "https://fotoforensics.com", types: ["image"], desc: "Анализ на монтаж (ELA) — проверка подлинности фото." },
+
+    // Гео
+    { cat: "Карты и геолокация", name: "Google Maps", host: "google.com/maps", url: "https://www.google.com/maps", tmpl: "https://www.google.com/maps/search/{q}", types: ["name"], desc: "Карты, спутник, панорамы Street View." },
+    { cat: "Карты и геолокация", name: "OpenStreetMap", host: "openstreetmap.org", url: "https://www.openstreetmap.org", tmpl: "https://www.openstreetmap.org/search?query={q}", types: ["name"], desc: "Открытая карта, удобна для деталей объектов." },
+    { cat: "Карты и геолокация", name: "SunCalc", host: "suncalc.org", url: "https://www.suncalc.org", types: ["image","name"], desc: "Положение солнца по дате — хронолокация по теням." },
+
+    // Камеры
+    { cat: "Публичные онлайн-камеры", name: "EarthCam", host: "earthcam.com", url: "https://www.earthcam.com", types: [], desc: "Каталог публичных камер по всему миру." },
+    { cat: "Публичные онлайн-камеры", name: "Windy Webcams", host: "windy.com", url: "https://www.windy.com", types: [], desc: "Карта туристических камер с привязкой к местности." },
+    { cat: "Публичные онлайн-камеры", name: "WorldCams", host: "worldcams.tv", url: "https://worldcams.tv/map/", types: [], desc: "Карта камер по категориям: туризм, промышленность." },
+
+    // Звук
+    { cat: "Звук и транскрипция", name: "Google Pinpoint", host: "journaliststudio.google.com", url: "https://journaliststudio.google.com/pinpoint/", types: [], desc: "Транскрипция и поиск по аудио- и документным архивам." },
+    { cat: "Звук и транскрипция", name: "Audio Extractor", host: "audio-extractor.net", url: "https://audio-extractor.net", types: [], desc: "Извлечение звуковой дорожки из видео в браузере." },
+
+    // Фреймворки
+    { cat: "OSINT-фреймворки", name: "OSINT Framework", host: "osintframework.com", url: "https://osintframework.com", types: [], desc: "Классическое дерево OSINT-ресурсов по категориям." },
+    { cat: "OSINT-фреймворки", name: "Bellingcat Toolkit", host: "bellingcat.com", url: "https://www.bellingcat.com/resources/", types: [], desc: "Подборка инструментов и методик от Bellingcat." },
+    { cat: "OSINT-фреймворки", name: "IntelTechniques", host: "inteltechniques.com", url: "https://inteltechniques.com/tools/", types: [], desc: "Набор инструментов Майкла Баззелла для расследований." },
+    { cat: "OSINT-фреймворки", name: "OSINT.rocks", host: "osint.rocks", url: "https://osint.rocks", types: [], desc: "Удобные веб-утилиты для базовых задач." },
+
+    // Поисковики (доп.)
+    { cat: "Поисковики и дорки", name: "Startpage", host: "startpage.com", url: "https://www.startpage.com", tmpl: "https://www.startpage.com/sp/search?query={q}", types: ["name","username","email","phone"], desc: "Результаты Google без трекинга и персонализации." },
+    { cat: "Поисковики и дорки", name: "Mojeek", host: "mojeek.com", url: "https://www.mojeek.com", tmpl: "https://www.mojeek.com/search?q={q}", types: ["name","username"], desc: "Полностью независимый индекс — другая выдача." },
+
+    // Поиск по нику (доп.)
+    { cat: "Поиск по нику", name: "Social Analyzer", host: "github.com/qeeqbox", url: "https://github.com/qeeqbox/social-analyzer", types: ["username"], desc: "API и инструмент поиска профилей на 1000+ сайтах. Open source." },
+
+    // Домены и IP (доп.)
+    { cat: "Домены и IP · инфраструктура", name: "urlscan.io", host: "urlscan.io", url: "https://urlscan.io", tmpl: "https://urlscan.io/search/#{q}", types: ["infra"], desc: "Сканы и скриншоты сайтов, связи между доменами." },
+    { cat: "Домены и IP · инфраструктура", name: "AbuseIPDB", host: "abuseipdb.com", url: "https://www.abuseipdb.com", tmpl: "https://www.abuseipdb.com/check/{q}", types: ["infra"], desc: "Репутация IP: жалобы на спам и атаки." },
+    { cat: "Домены и IP · инфраструктура", name: "DNSDumpster", host: "dnsdumpster.com", url: "https://dnsdumpster.com", types: ["infra"], desc: "Карта DNS и поддоменов домена." },
+    { cat: "Домены и IP · инфраструктура", name: "SecurityTrails", host: "securitytrails.com", url: "https://securitytrails.com", types: ["infra"], desc: "История DNS, поддомены и связанные домены." },
+
+    // Изображение (доп.)
+    { cat: "Поиск по изображению", name: "Forensically", host: "29a.ch", url: "https://29a.ch/photo-forensics/", types: ["image"], desc: "Набор криминалистических фильтров для анализа фото." },
+
+    // Соцсети и мессенджеры
+    { cat: "Соцсети и мессенджеры", name: "Social Searcher", host: "social-searcher.com", url: "https://www.social-searcher.com", tmpl: "https://www.social-searcher.com/google-social-search/?q={q}", types: ["name","username"], desc: "Поиск публичных упоминаний по соцсетям в реальном времени." },
+    { cat: "Соцсети и мессенджеры", name: "Lyzem", host: "lyzem.com", url: "https://lyzem.com", tmpl: "https://lyzem.com/search?q={q}", types: ["username","name"], desc: "Поиск по публичным Telegram-каналам и чатам." },
+    { cat: "Соцсети и мессенджеры", name: "TGStat", host: "tgstat.com", url: "https://tgstat.com", types: ["username","name"], desc: "Статистика и поиск публичных Telegram-каналов." },
+
+    // Транспорт
+    { cat: "Транспорт", name: "Flightradar24", host: "flightradar24.com", url: "https://www.flightradar24.com", types: [], desc: "Отслеживание рейсов в реальном времени." },
+    { cat: "Транспорт", name: "ADS-B Exchange", host: "adsbexchange.com", url: "https://globe.adsbexchange.com", types: [], desc: "Нефильтрованные данные о полётах, включая борта без цензуры." },
+    { cat: "Транспорт", name: "MarineTraffic", host: "marinetraffic.com", url: "https://www.marinetraffic.com", types: [], desc: "Карта судов и портов в реальном времени." },
+
+    // Реестры и санкции
+    { cat: "Публичные реестры и санкции", name: "OpenCorporates", host: "opencorporates.com", url: "https://opencorporates.com", tmpl: "https://opencorporates.com/companies?q={q}", types: ["name"], desc: "Крупнейшая открытая база компаний мира." },
+    { cat: "Публичные реестры и санкции", name: "OpenSanctions", host: "opensanctions.org", url: "https://www.opensanctions.org", tmpl: "https://www.opensanctions.org/search/?q={q}", types: ["name"], desc: "Санкционные списки и публичные лица (PEP)." },
+    { cat: "Публичные реестры и санкции", name: "OCCRP Aleph", host: "aleph.occrp.org", url: "https://aleph.occrp.org", tmpl: "https://aleph.occrp.org/search?q={q}", types: ["name"], desc: "Архив расследовательских данных и публичных документов." },
+
+    // Архивы
+    { cat: "Архивы", name: "archive.today", host: "archive.ph", url: "https://archive.ph", tmpl: "https://archive.ph/{q}", types: ["infra"], desc: "Снимки страниц, которые нельзя удалить задним числом." },
+    { cat: "Архивы", name: "Cached View", host: "cachedview.nl", url: "https://cachedview.nl", types: ["infra"], desc: "Доступ к кэшированным версиям страниц." },
+    { cat: "Архивы", name: "Memento Time Travel", host: "timetravel.mementoweb.org", url: "http://timetravel.mementoweb.org", types: ["infra"], desc: "Поиск архивных копий страницы по множеству архивов сразу." },
+    { cat: "Архивы", name: "UK Web Archive", host: "webarchive.org.uk", url: "https://www.webarchive.org.uk", types: [], desc: "Национальный веб-архив Великобритании." },
+
+    // Поисковики (пакет)
+    { cat: "Поисковики и дорки", name: "SearXNG", host: "searx.be", url: "https://searx.be", tmpl: "https://searx.be/search?q={q}", types: ["name","username","email","phone"], desc: "Метапоисковик с агрегацией выдачи без трекинга." },
+    { cat: "Поисковики и дорки", name: "Google Scholar", host: "scholar.google.com", url: "https://scholar.google.com", tmpl: "https://scholar.google.com/scholar?q={q}", types: ["name"], desc: "Научные публикации, авторы и цитирования." },
+    { cat: "Поисковики и дорки", name: "Baidu", host: "baidu.com", url: "https://www.baidu.com", tmpl: "https://www.baidu.com/s?wd={q}", types: ["name","username"], desc: "Основной поисковик по китайскому сегменту." },
+    { cat: "Поисковики и дорки", name: "Million Short", host: "millionshort.com", url: "https://millionshort.com", types: ["name","username"], desc: "Поиск с отсечением самых популярных сайтов — находит редкое." },
+    { cat: "Поисковики и дорки", name: "Google Advanced", host: "google.com/advanced_search", url: "https://www.google.com/advanced_search", types: [], desc: "Форма расширенного поиска с готовыми фильтрами." },
+
+    // Соцсети (пакет)
+    { cat: "Соцсети и мессенджеры", name: "X (Twitter) Search", host: "x.com/search", url: "https://x.com", tmpl: "https://x.com/search?q={q}", types: ["username","name"], desc: "Поиск по публичным постам X/Twitter." },
+    { cat: "Соцсети и мессенджеры", name: "Reddit Search", host: "reddit.com", url: "https://www.reddit.com", tmpl: "https://www.reddit.com/search/?q={q}", types: ["username","name"], desc: "Поиск по постам, комментариям и пользователям Reddit." },
+    { cat: "Соцсети и мессенджеры", name: "Social Blade", host: "socialblade.com", url: "https://socialblade.com", types: ["username"], desc: "Статистика публичных аккаунтов YouTube, Twitch, X и др." },
+    { cat: "Соцсети и мессенджеры", name: "Snapchat Map", host: "map.snapchat.com", url: "https://map.snapchat.com", types: [], desc: "Карта публичных сторис по геопривязке." },
+    { cat: "Соцсети и мессенджеры", name: "KnowEm", host: "knowem.com", url: "https://knowem.com", types: ["username"], desc: "Проверка ника и бренда на сотнях платформ." },
+
+    // Email (пакет)
+    { cat: "Email", name: "Email Hippo", host: "tools.emailhippo.com", url: "https://tools.emailhippo.com", types: ["email"], desc: "Проверка существования и доставляемости адреса." },
+    { cat: "Email", name: "Have I Been Pwned · Passwords", host: "haveibeenpwned.com/Passwords", url: "https://haveibeenpwned.com/Passwords", types: ["email"], desc: "Проверка СВОЕГО пароля на утечку (через k-анонимность)." },
+
+    // Домены и IP (пакет)
+    { cat: "Домены и IP · инфраструктура", name: "ViewDNS", host: "viewdns.info", url: "https://viewdns.info", tmpl: "https://viewdns.info/reverseip/?host={q}&t=1", types: ["infra"], desc: "Набор DNS-утилит: reverse IP, whois, propagation." },
+    { cat: "Домены и IP · инфраструктура", name: "BuiltWith", host: "builtwith.com", url: "https://builtwith.com", tmpl: "https://builtwith.com/{q}", types: ["infra"], desc: "Технологии, счётчики и трекеры сайта." },
+    { cat: "Домены и IP · инфраструктура", name: "URLVoid", host: "urlvoid.com", url: "https://www.urlvoid.com", tmpl: "https://www.urlvoid.com/scan/{q}", types: ["infra"], desc: "Репутация сайта по десяткам чёрных списков." },
+    { cat: "Домены и IP · инфраструктура", name: "Netcraft Site Report", host: "sitereport.netcraft.com", url: "https://sitereport.netcraft.com", types: ["infra"], desc: "История, хостинг и технологии сайта." },
+    { cat: "Домены и IP · инфраструктура", name: "GreyNoise", host: "viz.greynoise.io", url: "https://viz.greynoise.io", types: ["infra"], desc: "Контекст по IP: сканеры, шум, известная активность." },
+    { cat: "Домены и IP · инфраструктура", name: "Robtex", host: "robtex.com", url: "https://www.robtex.com", types: ["infra"], desc: "Связи между доменами, IP, DNS и AS." },
+
+    // Поиск по изображению (пакет)
+    { cat: "Поиск по изображению", name: "ImgOps", host: "imgops.com", url: "https://imgops.com", types: ["image"], desc: "Хаб обратного поиска и анализа по одному изображению." },
+    { cat: "Поиск по изображению", name: "Baidu Images", host: "image.baidu.com", url: "https://image.baidu.com", types: ["image"], desc: "Обратный поиск по китайскому сегменту." },
+
+    // Видео
+    { cat: "Видео", name: "InVID / WeVerify", host: "weverify.eu", url: "https://weverify.eu", types: [], desc: "Плагин для верификации видео: ключевые кадры, обратный поиск, метаданные." },
+    { cat: "Видео", name: "Amnesty YouTube DataViewer", host: "citizenevidence.amnesty.org", url: "https://citizenevidence.amnesty.org", types: [], desc: "Метаданные ролика YouTube и миниатюры для обратного поиска." },
+    { cat: "Видео", name: "YouTube Geofind", host: "mattw.io", url: "https://mattw.io/youtube-geofind/", types: [], desc: "Поиск роликов YouTube по геопривязке." },
+
+    // Карты и геолокация (пакет)
+    { cat: "Карты и геолокация", name: "Google Earth", host: "earth.google.com", url: "https://earth.google.com/web/", types: [], desc: "Спутник, 3D-рельеф и исторические снимки." },
+    { cat: "Карты и геолокация", name: "Yandex Maps", host: "yandex.com/maps", url: "https://yandex.com/maps", types: ["name"], desc: "Карты и панорамы, сильны по рунету." },
+    { cat: "Карты и геолокация", name: "Bing Maps", host: "bing.com/maps", url: "https://www.bing.com/maps", types: ["name"], desc: "Карты с видом «птичьего полёта» под разными углами." },
+    { cat: "Карты и геолокация", name: "Wikimapia", host: "wikimapia.org", url: "https://wikimapia.org", types: [], desc: "Карта с пользовательскими описаниями объектов." },
+    { cat: "Карты и геолокация", name: "Overpass Turbo", host: "overpass-turbo.eu", url: "https://overpass-turbo.eu", types: [], desc: "Запросы к данным OpenStreetMap (объекты, теги)." },
+    { cat: "Карты и геолокация", name: "Mapillary", host: "mapillary.com", url: "https://www.mapillary.com/app/", types: [], desc: "Уличные снимки от сообщества по всему миру." },
+    { cat: "Карты и геолокация", name: "what3words", host: "what3words.com", url: "https://what3words.com", types: [], desc: "Перевод координат в три слова и обратно." },
+    { cat: "Карты и геолокация", name: "GeoHints", host: "geohints.com", url: "https://geohints.com", types: [], desc: "Справочник признаков стран для геолокации по фото." },
+
+    // Погода и спутники
+    { cat: "Погода и спутники", name: "Sentinel Hub EO Browser", host: "sentinel-hub.com", url: "https://apps.sentinel-hub.com/eo-browser/", types: [], desc: "Свежие спутниковые снимки Sentinel по дате и месту." },
+    { cat: "Погода и спутники", name: "NASA Worldview", host: "worldview.earthdata.nasa.gov", url: "https://worldview.earthdata.nasa.gov", types: [], desc: "Ежедневные спутниковые снимки планеты." },
+    { cat: "Погода и спутники", name: "Zoom Earth", host: "zoom.earth", url: "https://zoom.earth", types: [], desc: "Погода, ураганы и спутник в реальном времени." },
+
+    // Крипто и блокчейн
+    { cat: "Крипто и блокчейн", name: "Blockchair", host: "blockchair.com", url: "https://blockchair.com", types: [], desc: "Обозреватель по множеству блокчейнов с поиском." },
+    { cat: "Крипто и блокчейн", name: "Etherscan", host: "etherscan.io", url: "https://etherscan.io", types: [], desc: "Транзакции и кошельки Ethereum." },
+    { cat: "Крипто и блокчейн", name: "Blockchain.com Explorer", host: "blockchain.com/explorer", url: "https://www.blockchain.com/explorer", types: [], desc: "Обозреватель транзакций Bitcoin и др." },
+    { cat: "Крипто и блокчейн", name: "Chainabuse", host: "chainabuse.com", url: "https://www.chainabuse.com", types: [], desc: "Публичные жалобы на мошеннические крипто-адреса." },
+    { cat: "Крипто и блокчейн", name: "Breadcrumbs", host: "breadcrumbs.app", url: "https://www.breadcrumbs.app", types: [], desc: "Визуализация связей между крипто-адресами." },
+
+    // Документы и расследования
+    { cat: "Документы и расследования", name: "ICIJ Offshore Leaks", host: "offshoreleaks.icij.org", url: "https://offshoreleaks.icij.org", tmpl: "https://offshoreleaks.icij.org/search?q={q}", types: ["name"], desc: "База офшорных компаний и бенефициаров из расследований ICIJ." },
+    { cat: "Документы и расследования", name: "DocumentCloud", host: "documentcloud.org", url: "https://www.documentcloud.org", types: ["name"], desc: "Открытый архив документов, загруженных журналистами." },
+    { cat: "Документы и расследования", name: "SEC EDGAR", host: "sec.gov", url: "https://www.sec.gov/cgi-bin/browse-edgar", types: ["name"], desc: "Отчётность публичных компаний США." },
+    { cat: "Документы и расследования", name: "UK Companies House", host: "find-and-update.company-information.service.gov.uk", url: "https://find-and-update.company-information.service.gov.uk", tmpl: "https://find-and-update.company-information.service.gov.uk/search?q={q}", types: ["name"], desc: "Официальный реестр компаний Великобритании." },
+    { cat: "Документы и расследования", name: "GLEIF LEI Search", host: "search.gleif.org", url: "https://search.gleif.org", types: ["name"], desc: "Глобальные идентификаторы юрлиц (LEI)." },
+
+    // Поисковики (пакет 3)
+    { cat: "Поисковики и дорки", name: "Marginalia", host: "search.marginalia.nu", url: "https://search.marginalia.nu", tmpl: "https://search.marginalia.nu/search?query={q}", types: ["name","username"], desc: "Поиск по «старому» некоммерческому вебу — находит то, что скрыто в топе." },
+    { cat: "Поисковики и дорки", name: "Yahoo Search", host: "search.yahoo.com", url: "https://search.yahoo.com", tmpl: "https://search.yahoo.com/search?p={q}", types: ["name","username"], desc: "Ещё один независимый срез выдачи." },
+    { cat: "Поисковики и дорки", name: "GHDB (Google Hacking DB)", host: "exploit-db.com/google-hacking-database", url: "https://www.exploit-db.com/google-hacking-database", types: [], desc: "База готовых поисковых дорков по категориям." },
+
+    // Соцсети (пакет 3)
+    { cat: "Соцсети и мессенджеры", name: "GitHub Users", host: "github.com/search", url: "https://github.com/search", tmpl: "https://github.com/search?q={q}&type=users", types: ["username","name"], desc: "Поиск публичных профилей и активности на GitHub." },
+    { cat: "Соцсети и мессенджеры", name: "Bluesky Search", host: "bsky.app", url: "https://bsky.app", tmpl: "https://bsky.app/search?q={q}", types: ["username","name"], desc: "Поиск по публичным постам сети Bluesky." },
+    { cat: "Соцсети и мессенджеры", name: "TikTok Search", host: "tiktok.com", url: "https://www.tiktok.com", tmpl: "https://www.tiktok.com/search?q={q}", types: ["username","name"], desc: "Поиск публичных роликов и аккаунтов TikTok." },
+    { cat: "Соцсети и мессенджеры", name: "YouTube Search", host: "youtube.com", url: "https://www.youtube.com", tmpl: "https://www.youtube.com/results?search_query={q}", types: ["username","name"], desc: "Поиск публичных видео и каналов." },
+    { cat: "Соцсети и мессенджеры", name: "Keybase", host: "keybase.io", url: "https://keybase.io", tmpl: "https://keybase.io/{q}", types: ["username"], desc: "Профили с подтверждёнными связанными аккаунтами." },
+    { cat: "Соцсети и мессенджеры", name: "Telemetr.io", host: "telemetr.io", url: "https://telemetr.io", types: ["username","name"], desc: "Аналитика публичных Telegram-каналов." },
+
+    // Email (пакет 3)
+    { cat: "Email", name: "DeHashed", host: "dehashed.com", url: "https://www.dehashed.com", types: ["email"], desc: "Платная проверка СВОИХ учёток по утечкам и мониторинг." },
+    { cat: "Email", name: "Mozilla Monitor", host: "monitor.mozilla.org", url: "https://monitor.mozilla.org", types: ["email"], desc: "Проверка своего адреса по утечкам от Mozilla." },
+
+    // Телефон (пакет)
+    { cat: "Номер телефона · метаданные", name: "Free Carrier Lookup", host: "freecarrierlookup.com", url: "https://freecarrierlookup.com", types: ["phone"], desc: "Бесплатное определение оператора и типа линии." },
+
+    // Домены и IP / threat intel (пакет 3)
+    { cat: "Домены и IP · инфраструктура", name: "DNSlytics", host: "dnslytics.com", url: "https://dnslytics.com", tmpl: "https://dnslytics.com/domain/{q}", types: ["infra"], desc: "Reverse-данные по домену, IP, провайдеру и трекерам." },
+    { cat: "Домены и IP · инфраструктура", name: "Whoxy", host: "whoxy.com", url: "https://www.whoxy.com", tmpl: "https://www.whoxy.com/{q}", types: ["infra"], desc: "WHOIS с историей и reverse-поиском по регистранту." },
+    { cat: "Домены и IP · инфраструктура", name: "BGP.he.net", host: "bgp.he.net", url: "https://bgp.he.net", tmpl: "https://bgp.he.net/dns/{q}", types: ["infra"], desc: "DNS, AS и маршрутизация от Hurricane Electric." },
+    { cat: "Домены и IP · инфраструктура", name: "Pulsedive", host: "pulsedive.com", url: "https://pulsedive.com", tmpl: "https://pulsedive.com/indicator/?ioc={q}", types: ["infra"], desc: "Threat-intelligence по домену, IP и URL." },
+    { cat: "Домены и IP · инфраструктура", name: "AlienVault OTX", host: "otx.alienvault.com", url: "https://otx.alienvault.com", types: ["infra"], desc: "Открытая база индикаторов угроз сообщества." },
+    { cat: "Домены и IP · инфраструктура", name: "ZoomEye", host: "zoomeye.org", url: "https://www.zoomeye.org", types: ["infra"], desc: "Поисковик по подключённым устройствам, альтернатива Shodan." },
+    { cat: "Домены и IP · инфраструктура", name: "Scamalytics", host: "scamalytics.com", url: "https://scamalytics.com", types: ["infra"], desc: "Оценка риска мошенничества по IP." },
+
+    // Изображение (пакет 3)
+    { cat: "Поиск по изображению", name: "Pic2Map", host: "pic2map.com", url: "https://www.pic2map.com", types: ["image"], desc: "EXIF-данные снимка с нанесением координат на карту." },
+
+    // Карты (пакет 3)
+    { cat: "Карты и геолокация", name: "Shadowmap", host: "shadowmap.org", url: "https://shadowmap.org", types: [], desc: "Тени зданий по времени — хронолокация." },
+    { cat: "Карты и геолокация", name: "KartaView", host: "kartaview.org", url: "https://kartaview.org", types: [], desc: "Открытые уличные снимки сообщества." },
+    { cat: "Карты и геолокация", name: "Flash Earth", host: "flashearth.com", url: "https://www.flashearth.com", types: [], desc: "Переключение спутниковых слоёв от разных провайдеров." },
+    { cat: "Карты и геолокация", name: "Mapchecking", host: "mapchecking.com", url: "https://www.mapchecking.com", types: [], desc: "Оценка численности толпы на площади." },
+
+    // Крипто (пакет 3)
+    { cat: "Крипто и блокчейн", name: "WalletExplorer", host: "walletexplorer.com", url: "https://www.walletexplorer.com", types: [], desc: "Группировка Bitcoin-адресов по кошелькам." },
+    { cat: "Крипто и блокчейн", name: "Tronscan", host: "tronscan.org", url: "https://tronscan.org", types: [], desc: "Обозреватель сети TRON." },
+    { cat: "Крипто и блокчейн", name: "BscScan", host: "bscscan.com", url: "https://bscscan.com", types: [], desc: "Обозреватель BNB Smart Chain." },
+    { cat: "Крипто и блокчейн", name: "Bitref", host: "bitref.com", url: "https://bitref.com", types: [], desc: "Быстрая проверка баланса Bitcoin-адреса." },
+
+    // Базы знаний и связи
+    { cat: "Базы знаний и связи", name: "Wikidata", host: "wikidata.org", url: "https://www.wikidata.org", tmpl: "https://www.wikidata.org/w/index.php?search={q}", types: ["name"], desc: "Структурированные данные о людях, организациях и объектах." },
+    { cat: "Базы знаний и связи", name: "Wikipedia", host: "wikipedia.org", url: "https://www.wikipedia.org", tmpl: "https://en.wikipedia.org/w/index.php?search={q}", types: ["name"], desc: "Статьи и источники по публичным лицам и событиям." },
+    { cat: "Базы знаний и связи", name: "LittleSis", host: "littlesis.org", url: "https://littlesis.org", tmpl: "https://littlesis.org/search?q={q}", types: ["name"], desc: "Публичная база связей между влиятельными лицами и компаниями." },
+    { cat: "Базы знаний и связи", name: "OpenOwnership", host: "register.openownership.org", url: "https://register.openownership.org", types: ["name"], desc: "Реестр бенефициарных владельцев компаний." },
+
+    // Фреймворки (пакет)
+    { cat: "OSINT-фреймворки", name: "Awesome OSINT", host: "github.com/jivoi/awesome-osint", url: "https://github.com/jivoi/awesome-osint", types: [], desc: "Большой поддерживаемый список OSINT-ресурсов на GitHub." },
+    { cat: "OSINT-фреймворки", name: "OSINT Combine", host: "osintcombine.com", url: "https://www.osintcombine.com/tools", types: [], desc: "Бесплатные инструменты и методички для расследований." },
+    { cat: "OSINT-фреймворки", name: "Hatless1der", host: "hatless1der.com", url: "https://hatless1der.com", types: [], desc: "Блог и подборки трюков OSINT." },
+
+    // Поисковики (пакет 4)
+    { cat: "Поисковики и дорки", name: "Google News", host: "news.google.com", url: "https://news.google.com", tmpl: "https://news.google.com/search?q={q}", types: ["name"], desc: "Поиск по новостям с архивом публикаций." },
+    { cat: "Поисковики и дорки", name: "Presearch", host: "presearch.com", url: "https://presearch.com", types: ["name","username"], desc: "Децентрализованный поисковик без профилирования." },
+
+    // Соцсети (пакет 4)
+    { cat: "Соцсети и мессенджеры", name: "Pinterest", host: "pinterest.com", url: "https://www.pinterest.com", tmpl: "https://www.pinterest.com/search/pins/?q={q}", types: ["name"], desc: "Поиск по изображениям и доскам." },
+    { cat: "Соцсети и мессенджеры", name: "Flickr", host: "flickr.com", url: "https://www.flickr.com", tmpl: "https://www.flickr.com/search/?text={q}", types: ["name","username"], desc: "Фото с геометками и профили авторов." },
+    { cat: "Соцсети и мессенджеры", name: "SoundCloud", host: "soundcloud.com", url: "https://soundcloud.com", tmpl: "https://soundcloud.com/search?q={q}", types: ["username","name"], desc: "Поиск по трекам и публичным профилям." },
+    { cat: "Соцсети и мессенджеры", name: "Twitch", host: "twitch.tv", url: "https://www.twitch.tv", tmpl: "https://www.twitch.tv/search?term={q}", types: ["username"], desc: "Поиск стримеров и каналов." },
+    { cat: "Соцсети и мессенджеры", name: "Vimeo", host: "vimeo.com", url: "https://vimeo.com", tmpl: "https://vimeo.com/search?q={q}", types: ["username","name"], desc: "Поиск по видео и авторам." },
+    { cat: "Соцсети и мессенджеры", name: "Disboard (Discord)", host: "disboard.org", url: "https://disboard.org", tmpl: "https://disboard.org/search?keyword={q}", types: [], desc: "Поиск публичных Discord-серверов." },
+    { cat: "Соцсети и мессенджеры", name: "VK", host: "vk.com", url: "https://vk.com", types: [], desc: "Крупнейшая соцсеть рунета — поиск людей, групп, постов." },
+
+    // Домены и IP (пакет 4)
+    { cat: "Домены и IP · инфраструктура", name: "Netlas", host: "netlas.io", url: "https://app.netlas.io", tmpl: "https://app.netlas.io/responses/?q={q}", types: ["infra"], desc: "Поисковик по интернет-активам: хосты, сертификаты, домены." },
+    { cat: "Домены и IP · инфраструктура", name: "WhatCMS", host: "whatcms.org", url: "https://whatcms.org", tmpl: "https://whatcms.org/?s={q}", types: ["infra"], desc: "Определение CMS и движка сайта." },
+    { cat: "Домены и IP · инфраструктура", name: "SSL Labs", host: "ssllabs.com", url: "https://www.ssllabs.com/ssltest/", tmpl: "https://www.ssllabs.com/ssltest/analyze.html?d={q}", types: ["infra"], desc: "Глубокий анализ TLS/SSL-конфигурации сайта." },
+    { cat: "Домены и IP · инфраструктура", name: "DomainTools Whois", host: "whois.domaintools.com", url: "https://whois.domaintools.com", tmpl: "https://whois.domaintools.com/{q}", types: ["infra"], desc: "WHOIS с историей изменений." },
+    { cat: "Домены и IP · инфраструктура", name: "ip-api", host: "ip-api.com", url: "https://ip-api.com", types: ["infra"], desc: "Быстрая геолокация и данные по IP." },
+
+    // Изображение (пакет 4)
+    { cat: "Поиск по изображению", name: "Metadata2Go", host: "metadata2go.com", url: "https://www.metadata2go.com", types: ["image"], desc: "Просмотр метаданных фото, видео и документов." },
+    { cat: "Поиск по изображению", name: "Sherloq", host: "github.com/GuidoBartoli/sherloq", url: "https://github.com/GuidoBartoli/sherloq", types: ["image"], desc: "Настольный набор инструментов фотокриминалистики. Open source." },
+
+    // Карты (пакет 4)
+    { cat: "Карты и геолокация", name: "Liveuamap", host: "liveuamap.com", url: "https://liveuamap.com", types: [], desc: "Карта событий и конфликтов в реальном времени." },
+    { cat: "Карты и геолокация", name: "Topographic Map", host: "topographic-map.com", url: "https://en-gb.topographic-map.com", types: [], desc: "Рельеф и высоты местности по всему миру." },
+    { cat: "Карты и геолокация", name: "PeakVisor", host: "peakvisor.com", url: "https://peakvisor.com", types: [], desc: "Идентификация гор и вершин по панораме." },
+
+    // Погода и спутники (пакет 2)
+    { cat: "Погода и спутники", name: "Ventusky", host: "ventusky.com", url: "https://www.ventusky.com", types: [], desc: "Интерактивная карта погоды по слоям." },
+    { cat: "Погода и спутники", name: "NASA FIRMS", host: "firms.modaps.eosdis.nasa.gov", url: "https://firms.modaps.eosdis.nasa.gov/map/", types: [], desc: "Карта пожаров и термоточек со спутников." },
+    { cat: "Погода и спутники", name: "Soar.earth", host: "soar.earth", url: "https://soar.earth", types: [], desc: "Библиотека спутниковых и аэроснимков." },
+
+    // Крипто (пакет 4)
+    { cat: "Крипто и блокчейн", name: "OKLink", host: "oklink.com", url: "https://www.oklink.com", types: [], desc: "Мультичейн-обозреватель с аналитикой адресов." },
+    { cat: "Крипто и блокчейн", name: "DeBank", host: "debank.com", url: "https://debank.com", types: [], desc: "Портфель и активность DeFi-адреса." },
+    { cat: "Крипто и блокчейн", name: "Arkham", host: "arkhamintelligence.com", url: "https://platform.arkhamintelligence.com", types: [], desc: "Аналитика и разметка блокчейн-адресов." },
+
+    // Документы и расследования (пакет 2)
+    { cat: "Документы и расследования", name: "Google Patents", host: "patents.google.com", url: "https://patents.google.com", tmpl: "https://patents.google.com/?q={q}", types: ["name"], desc: "Патенты и заявки с указанием авторов и компаний." },
+    { cat: "Документы и расследования", name: "CourtListener", host: "courtlistener.com", url: "https://www.courtlistener.com", tmpl: "https://www.courtlistener.com/?q={q}", types: ["name"], desc: "Судебные решения и материалы судов США." },
+    { cat: "Документы и расследования", name: "USAspending", host: "usaspending.gov", url: "https://www.usaspending.gov", types: ["name"], desc: "Государственные расходы и контракты США." },
+    { cat: "Документы и расследования", name: "OCCRP ID", host: "id.occrp.org", url: "https://id.occrp.org", types: [], desc: "Investigative Dashboard — реестры и базы для журналистов." },
+
+    // Фреймворки (пакет 2)
+    { cat: "OSINT-фреймворки", name: "OSINT Dojo", host: "osintdojo.com", url: "https://www.osintdojo.com", types: [], desc: "Обучающие материалы и упражнения по OSINT." },
+    { cat: "OSINT-фреймворки", name: "UK-OSINT", host: "uk-osint.net", url: "https://www.uk-osint.net", types: [], desc: "Подборка ресурсов с упором на Великобританию." },
+
+    // Поисковики (пакет 5)
+    { cat: "Поисковики и дорки", name: "Qwant", host: "qwant.com", url: "https://www.qwant.com", tmpl: "https://www.qwant.com/?q={q}", types: ["name","username"], desc: "Европейский поисковик без трекинга." },
+    { cat: "Поисковики и дорки", name: "Dogpile", host: "dogpile.com", url: "https://www.dogpile.com", tmpl: "https://www.dogpile.com/serp?q={q}", types: ["name","username"], desc: "Метапоиск по нескольким движкам сразу." },
+
+    // Соцсети (пакет 5)
+    { cat: "Соцсети и мессенджеры", name: "Tumblr", host: "tumblr.com", url: "https://www.tumblr.com", tmpl: "https://www.tumblr.com/search/{q}", types: ["name","username"], desc: "Поиск по блогам и тегам." },
+    { cat: "Соцсети и мессенджеры", name: "Steam", host: "steamcommunity.com", url: "https://steamcommunity.com", tmpl: "https://steamcommunity.com/search/users/#text={q}", types: ["username"], desc: "Поиск публичных игровых профилей." },
+    { cat: "Соцсети и мессенджеры", name: "Spotify", host: "open.spotify.com", url: "https://open.spotify.com", tmpl: "https://open.spotify.com/search/{q}", types: ["name","username"], desc: "Поиск исполнителей, плейлистов и профилей." },
+    { cat: "Соцсети и мессенджеры", name: "Last.fm", host: "last.fm", url: "https://www.last.fm", tmpl: "https://www.last.fm/search?q={q}", types: ["username","name"], desc: "Профили и история прослушиваний." },
+    { cat: "Соцсети и мессенджеры", name: "Patreon", host: "patreon.com", url: "https://www.patreon.com", tmpl: "https://www.patreon.com/search?q={q}", types: ["name","username"], desc: "Поиск авторов и проектов." },
+    { cat: "Соцсети и мессенджеры", name: "Rumble", host: "rumble.com", url: "https://rumble.com", tmpl: "https://rumble.com/search/video?q={q}", types: ["username","name"], desc: "Поиск по видео и каналам." },
+
+    // Код и репозитории
+    { cat: "Код и репозитории", name: "GitLab", host: "gitlab.com", url: "https://gitlab.com", tmpl: "https://gitlab.com/search?search={q}", types: ["username","name"], desc: "Поиск по публичным проектам и пользователям." },
+    { cat: "Код и репозитории", name: "Stack Overflow", host: "stackoverflow.com", url: "https://stackoverflow.com", tmpl: "https://stackoverflow.com/search?q={q}", types: ["username","name"], desc: "Поиск по вопросам, ответам и профилям." },
+    { cat: "Код и репозитории", name: "grep.app", host: "grep.app", url: "https://grep.app", tmpl: "https://grep.app/search?q={q}", types: [], desc: "Поиск по коду в публичных репозиториях." },
+    { cat: "Код и репозитории", name: "PublicWWW", host: "publicwww.com", url: "https://publicwww.com", tmpl: "https://publicwww.com/websites/{q}/", types: ["infra"], desc: "Поиск сайтов по фрагментам исходного кода, трекерам, ID." },
+    { cat: "Код и репозитории", name: "Searchcode", host: "searchcode.com", url: "https://searchcode.com", tmpl: "https://searchcode.com/?q={q}", types: [], desc: "Поиск по исходному коду из множества источников." },
+
+    // Домены / угрозы (пакет 5)
+    { cat: "Домены и IP · инфраструктура", name: "Onyphe", host: "onyphe.io", url: "https://www.onyphe.io", types: ["infra"], desc: "Поисковик по интернет-сканам и киберугрозам." },
+    { cat: "Домены и IP · инфраструктура", name: "Criminal IP", host: "criminalip.io", url: "https://www.criminalip.io", types: ["infra"], desc: "Поиск устройств и оценка риска IP." },
+    { cat: "Домены и IP · инфраструктура", name: "URLhaus", host: "urlhaus.abuse.ch", url: "https://urlhaus.abuse.ch", types: ["infra"], desc: "База вредоносных URL от abuse.ch." },
+    { cat: "Домены и IP · инфраструктура", name: "PhishTank", host: "phishtank.org", url: "https://www.phishtank.com", types: ["infra"], desc: "Открытая база фишинговых сайтов." },
+    { cat: "Домены и IP · инфраструктура", name: "MalwareBazaar", host: "bazaar.abuse.ch", url: "https://bazaar.abuse.ch", types: ["infra"], desc: "База образцов вредоносного ПО и индикаторов." },
+
+    // Изображение и видео (пакет 5)
+    { cat: "Поиск по изображению", name: "Jimpl", host: "jimpl.com", url: "https://jimpl.com", types: ["image"], desc: "Онлайн-просмотр EXIF и координат снимка." },
+    { cat: "Поиск по изображению", name: "Wolfram Image Identify", host: "imageidentify.com", url: "https://www.imageidentify.com", types: ["image"], desc: "Распознавание содержимого фото нейросетью." },
+    { cat: "Видео", name: "Deepware Scanner", host: "deepware.ai", url: "https://scanner.deepware.ai", types: [], desc: "Проверка видео на признаки дипфейка." },
+
+    // Карты и геолокация (пакет 5)
+    { cat: "Карты и геолокация", name: "Instant Street View", host: "instantstreetview.com", url: "https://www.instantstreetview.com", types: [], desc: "Быстрый просмотр панорам по координатам." },
+    { cat: "Карты и геолокация", name: "GeoNames", host: "geonames.org", url: "https://www.geonames.org", tmpl: "http://www.geonames.org/search.html?q={q}", types: ["name"], desc: "База географических названий и координат." },
+    { cat: "Карты и геолокация", name: "Nominatim (OSM)", host: "nominatim.openstreetmap.org", url: "https://nominatim.openstreetmap.org", tmpl: "https://nominatim.openstreetmap.org/ui/search.html?q={q}", types: ["name"], desc: "Геокодер OpenStreetMap: адрес ↔ координаты." },
+    { cat: "Карты и геолокация", name: "CellMapper", host: "cellmapper.net", url: "https://www.cellmapper.net", types: [], desc: "Карта вышек сотовой связи." },
+
+    // Погода и спутники (пакет 3)
+    { cat: "Погода и спутники", name: "USGS EarthExplorer", host: "earthexplorer.usgs.gov", url: "https://earthexplorer.usgs.gov", types: [], desc: "Архив спутниковых и аэроснимков USGS." },
+    { cat: "Погода и спутники", name: "Copernicus Browser", host: "dataspace.copernicus.eu", url: "https://dataspace.copernicus.eu/browser/", types: [], desc: "Доступ к данным спутников Copernicus/Sentinel." },
+
+    // Крипто (пакет 5)
+    { cat: "Крипто и блокчейн", name: "Solscan", host: "solscan.io", url: "https://solscan.io", types: [], desc: "Обозреватель сети Solana." },
+    { cat: "Крипто и блокчейн", name: "Mempool.space", host: "mempool.space", url: "https://mempool.space", types: [], desc: "Мемпул и обозреватель Bitcoin." },
+    { cat: "Крипто и блокчейн", name: "Bitcoin Who's Who", host: "bitcoinwhoswho.com", url: "https://bitcoinwhoswho.com", tmpl: "https://bitcoinwhoswho.com/address/{q}", types: [], desc: "Публичные упоминания и отзывы о BTC-адресе." },
+
+    // Документы и реестры (пакет 3)
+    { cat: "Документы и расследования", name: "North Data", host: "northdata.com", url: "https://www.northdata.com", tmpl: "https://www.northdata.com/_search?query={q}", types: ["name"], desc: "Компании и их руководители (упор на Европу)." },
+    { cat: "Документы и расследования", name: "WIPO Global Brand", host: "branddb.wipo.int", url: "https://branddb.wipo.int", types: ["name"], desc: "Международная база товарных знаков." },
+    { cat: "Документы и расследования", name: "GovInfo", host: "govinfo.gov", url: "https://www.govinfo.gov", types: ["name"], desc: "Официальные публикации правительства США." },
+
+    // Фреймворки / автоматизация (пакет 3)
+    { cat: "OSINT-фреймворки", name: "SpiderFoot", host: "github.com/smicallef/spiderfoot", url: "https://github.com/smicallef/spiderfoot", types: [], desc: "Автоматизация OSINT по доменам, IP, email. Open source." },
+    { cat: "OSINT-фреймворки", name: "theHarvester", host: "github.com/laramies/theHarvester", url: "https://github.com/laramies/theHarvester", types: [], desc: "Сбор публичных поддоменов, email и хостов домена." },
+    { cat: "OSINT-фреймворки", name: "Recon-ng", host: "github.com/lanmaster53/recon-ng", url: "https://github.com/lanmaster53/recon-ng", types: [], desc: "Модульный фреймворк веб-разведки. Open source." },
+    { cat: "OSINT-фреймворки", name: "Maltego", host: "maltego.com", url: "https://www.maltego.com", types: [], desc: "Визуализация связей между сущностями расследования." },
+  ];
+
+  const STEPS = [
+    { n: "Зафиксируйте, что известно", d: "Соберите исходные данные (ник, домен, фото) и законное основание для работы." },
+    { n: "Начните с широкого поиска", d: "Прогоните запрос по нескольким поисковикам с кавычками и операторами." },
+    { n: "Проверяйте, а не верьте", d: "Любой факт подтверждайте минимум из двух независимых источников." },
+    { n: "Идите от публичного к публичному", d: "Профили, архивы, инфраструктура — только открытая информация." },
+    { n: "Фиксируйте источники", d: "Сохраняйте ссылки, даты и скриншоты — выводы должны быть воспроизводимы." },
+    { n: "Остановитесь на границе закона", d: "Персональные данные, захват аккаунтов, обман — это не OSINT. Передавайте дело в официальные органы." },
+  ];
+
+  // ---- osintlist-style console: sidebar tool list + single-tool main view ----
+  const qInput = document.getElementById("q");
+  const goBtn = document.getElementById("gobtn");
+  const copyBtn = document.getElementById("copyq");
+  const mainTitle = document.getElementById("mainTitle");
+  const mainDesc = document.getElementById("mainDesc");
+  const qHint = document.getElementById("qhint");
+  const toolHost = document.getElementById("toolhost");
+  const navEl = document.getElementById("nav");
+  const navFilter = document.getElementById("navfilter");
+  const toolView = document.getElementById("toolview");
+  const selfView = document.getElementById("self-view");
+  const checklistView = document.getElementById("checklist-view");
+
+  const CATS = [...new Set(TOOLS.map(t => t.cat))];
+  const LS = "osint-console-v2";
+  let state = { view: 0, q: "" };
+
+  function saveState() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+  function loadState() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS) || "{}");
+      if (s && ((typeof s.view === "number" && TOOLS[s.view]) || s.view === "self" || s.view === "checklist")) state.view = s.view;
+      if (typeof s.q === "string") state.q = s.q;
+    } catch (e) {}
+  }
+
+  // ---- sidebar list ----
+  function buildNav() {
+    const ft = (navFilter.value || "").trim().toLowerCase();
+    let html = `<button class="nav-special" data-view="self">Проверка себя</button>`;
+    html += `<button class="nav-special" data-view="checklist">Чеклист</button>`;
+    CATS.forEach(cat => {
+      const items = [];
+      TOOLS.forEach((t, i) => {
+        if (t.cat !== cat) return;
+        if (ft && !(t.name + " " + t.host + " " + t.desc).toLowerCase().includes(ft)) return;
+        items.push({ t, i });
+      });
+      if (!items.length) return;
+      const direct = items.filter(o => o.t.tmpl).length;
+      html += `<div class="nav-group"><div class="nav-cat">${cat}</div>`;
+      if (direct) html += `<button class="nav-all" data-cat="${encodeURIComponent(cat)}">Все сразу (${direct})</button>`;
+      items.forEach(o => { html += `<button class="nav-tool" data-idx="${o.i}">${o.t.name}</button>`; });
+      html += `</div>`;
+    });
+    navEl.innerHTML = html;
+    markActive();
+  }
+  function markActive() {
+    navEl.querySelectorAll(".nav-tool,.nav-special").forEach(b => {
+      const a = (b.dataset.view && b.dataset.view === state.view) ||
+                (b.dataset.idx != null && Number(b.dataset.idx) === state.view);
+      b.setAttribute("aria-current", a ? "true" : "false");
+    });
+  }
+
+  // ---- main view ----
+  function renderMain() {
+    const isSelf = state.view === "self", isList = state.view === "checklist";
+    toolView.hidden = isSelf || isList;
+    selfView.hidden = !isSelf;
+    checklistView.hidden = !isList;
+    if (isSelf || isList) return;
+    const t = TOOLS[state.view] || TOOLS[0];
+    mainTitle.textContent = t.name;
+    mainDesc.textContent = t.desc;
+    toolHost.textContent = t.host;
+    qInput.value = state.q;
+    if (t.tmpl) {
+      qInput.hidden = false; copyBtn.hidden = false;
+      qInput.placeholder = "введите запрос…";
+      goBtn.textContent = "Открыть с запросом →";
+      qHint.textContent = "Enter — открыть " + t.host + " с подставленным запросом. Переход вручную, в новой вкладке.";
+    } else {
+      qInput.hidden = true; copyBtn.hidden = true;
+      goBtn.textContent = "Открыть " + t.host + " →";
+      qHint.textContent = "Прямой подстановки запроса нет — откроется сайт, поиск вводите уже там.";
+    }
+  }
+
+  function openUrl(u) {
+    const a = document.createElement("a");
+    a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  function openCurrent() {
+    const t = TOOLS[state.view]; if (!t) return;
+    if (t.tmpl) {
+      const v = qInput.value.trim(); if (!v) { qInput.focus(); return; }
+      state.q = v; saveState();
+      openUrl(t.tmpl.replace("{q}", encodeURIComponent(v)));
+    } else {
+      openUrl(t.url);
+    }
+  }
+  function scrollTop() { try { document.querySelector(".main-inner").scrollIntoView({ block: "start" }); } catch (e) {} }
+
+  // ---- events ----
+  navEl.addEventListener("click", e => {
+    const all = e.target.closest(".nav-all");
+    if (all) {
+      const v = (state.q || qInput.value || "").trim();
+      if (!v) { qInput.focus(); return; }
+      const cat = decodeURIComponent(all.dataset.cat);
+      TOOLS.filter(t => t.cat === cat && t.tmpl)
+        .forEach(t => openUrl(t.tmpl.replace("{q}", encodeURIComponent(v))));
+      return;
+    }
+    const sp = e.target.closest(".nav-special");
+    if (sp) { state.view = sp.dataset.view; saveState(); markActive(); renderMain(); scrollTop(); return; }
+    const tl = e.target.closest(".nav-tool");
+    if (tl) { state.view = Number(tl.dataset.idx); saveState(); markActive(); renderMain(); scrollTop(); }
+  });
+  navFilter.addEventListener("input", buildNav);
+  goBtn.addEventListener("click", openCurrent);
+  qInput.addEventListener("input", () => { state.q = qInput.value; saveState(); });
+  qInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); openCurrent(); } });
+  copyBtn.addEventListener("click", () => {
+    const orig = copyBtn.textContent;
+    const done = () => { copyBtn.textContent = "Скопировано"; setTimeout(() => { copyBtn.textContent = orig; }, 1200); };
+    const val = qInput.value; if (!val) { qInput.focus(); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(val).then(done).catch(() => qInput.select());
+    else qInput.select();
+  });
+
+  // ---- steps ----
+  document.getElementById("steps").innerHTML = STEPS.map(s =>
+    `<li><div><div class="st-name">${s.n}</div><div class="st-desc">${s.d}</div></div></li>`
+  ).join("");
+
+  // ---- init ----
+  loadState();
+  buildNav();
+  renderMain();
+</script>
+</body>
+</html>
